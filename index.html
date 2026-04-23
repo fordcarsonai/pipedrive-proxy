@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>RE Broker OS</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#080c14;font-family:Inter,system-ui,sans-serif;color:#f9fafb;height:100vh;overflow:hidden;display:flex}
+  ::-webkit-scrollbar{width:5px;height:5px}
+  ::-webkit-scrollbar-track{background:#080c14}
+  ::-webkit-scrollbar-thumb{background:#1f2937;border-radius:3px}
+  input,textarea,select,button{font-family:inherit;outline:none}
+  #sidebar{width:200px;background:#0a0f1a;border-right:1px solid #1f2937;display:flex;flex-direction:column;flex-shrink:0}
+  #sidebar .logo{padding:20px 16px 16px;border-bottom:1px solid #1f2937}
+  #sidebar .logo h1{font-size:13px;font-weight:800;letter-spacing:-.02em}
+  #sidebar .logo p{font-size:10px;color:#374151;letter-spacing:.12em;text-transform:uppercase;margin-top:2px}
+  #sidebar nav{flex:1;padding:12px 0}
+  .nav-btn{display:flex;align-items:center;gap:9px;width:100%;padding:9px 16px;background:transparent;border:none;border-left:2px solid transparent;cursor:pointer;color:#4b5563;text-align:left;transition:.15s}
+  .nav-btn.active{background:#1f2937;border-left-color:#f59e0b;color:#f9fafb}
+  .nav-btn span.label{font-size:12px}
+  .nav-btn .badge{margin-left:auto;background:#ef4444;color:#fff;border-radius:10px;padding:1px 6px;font-size:9px;font-weight:800}
+  #sidebar .refresh-wrap{padding:12px 16px;border-top:1px solid #1f2937}
+  .refresh-btn{width:100%;background:#1f2937;border:1px solid #374151;color:#9ca3af;border-radius:6px;padding:7px 0;font-size:11px;cursor:pointer}
+  #main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+  #topbar{border-bottom:1px solid #1f2937;padding:10px 24px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+  #topbar .meta{color:#6b7280;font-size:11px}
+  #search{background:#0d1117;border:1px solid #1f2937;border-radius:6px;padding:5px 12px;color:#d1d5db;font-size:11px;width:200px}
+  #content-wrap{flex:1;display:flex;overflow:hidden}
+  #content{flex:1;overflow:auto;padding:24px 28px}
+  #detail{width:320px;border-left:1px solid #1f2937;overflow:auto;padding:22px;flex-shrink:0;display:none}
+  .card{background:#111827;border:1px solid #1f2937;border-radius:8px}
+  .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
+  .stat{background:#111827;border:1px solid #1f2937;border-radius:8px;padding:18px 22px}
+  .stat .slabel{color:#6b7280;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
+  .stat .sval{font-size:26px;font-weight:800;line-height:1}
+  .stat .ssub{color:#4b5563;font-size:11px;margin-top:5px}
+  .tbl-head{padding:10px 18px;border-bottom:1px solid #1f2937;display:grid;color:#4b5563;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em}
+  .tbl-row{padding:13px 18px;border-bottom:1px solid #0f1623;display:grid;align-items:center;cursor:pointer;transition:.1s}
+  .tbl-row:hover{background:#0d1117}
+  .tbl-row.selected{background:#1a2236}
+  .badge{display:inline-flex;align-items:center;gap:4px;border-radius:4px;padding:2px 8px;font-size:10px;font-weight:700;text-transform:uppercase;white-space:nowrap;border:1px solid transparent}
+  .badge .dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+  h2.page-title{color:#f9fafb;font-size:18px;font-weight:800;margin:0 0 4px}
+  .page-sub{color:#6b7280;font-size:12px;margin-bottom:20px}
+  .section-label{color:#4b5563;font-size:9px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+  .info-block{background:#0d1117;border-radius:7px;padding:14px;margin-bottom:12px}
+  .pipeline-wrap{display:flex;gap:14px;overflow-x:auto;padding-bottom:12px}
+  .pipeline-col{min-width:220px;background:#0d1117;border:1px solid #1f2937;border-radius:8px;padding:16px;flex-shrink:0}
+  .deal-card{background:#111827;border:1px solid #1f2937;border-radius:6px;padding:10px 12px;margin-bottom:8px}
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:200;display:none}
+  .modal{background:#111827;border:1px solid #374151;border-radius:12px;padding:28px;width:480px}
+  #loading-screen,#error-screen{position:fixed;inset:0;background:#080c14;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;z-index:300}
+</style>
+</head>
+<body>
+
+<div id="loading-screen">
+  <div style="font-size:18px;font-weight:800">Connecting to Pipedrive…</div>
+  <div style="color:#6b7280;font-size:13px">Pulling your contacts, deals & tasks</div>
+</div>
+
+<div id="error-screen" style="display:none">
+  <div style="font-size:22px">⚠️</div>
+  <div style="font-size:15px;font-weight:700">Connection Error</div>
+  <div id="error-msg" style="color:#6b7280;font-size:13px;max-width:340px;text-align:center"></div>
+  <button onclick="init()" style="margin-top:8px;background:#f59e0b;border:none;color:#000;border-radius:7px;padding:10px 24px;font-size:13px;font-weight:800;cursor:pointer">Retry</button>
+</div>
+
+<div id="sidebar">
+  <div class="logo">
+    <h1>RE BROKER OS</h1>
+    <p id="username">Loading…</p>
+  </div>
+  <nav>
+    <button class="nav-btn active" onclick="setView('priority')" id="nav-priority">
+      <span>⚡</span><span class="label">Priority Queue</span>
+    </button>
+    <button class="nav-btn" onclick="setView('tasks')" id="nav-tasks">
+      <span>✓</span><span class="label">Tasks</span><span class="badge" id="overdue-badge" style="display:none">0</span>
+    </button>
+    <button class="nav-btn" onclick="setView('contacts')" id="nav-contacts">
+      <span>◉</span><span class="label">All Contacts</span>
+    </button>
+    <button class="nav-btn" onclick="setView('pipeline')" id="nav-pipeline">
+      <span>◫</span><span class="label">Pipeline</span>
+    </button>
+  </nav>
+  <div class="refresh-wrap">
+    <button class="refresh-btn" onclick="fetchAll()">↻ Refresh Data</button>
+  </div>
+</div>
+
+<div id="main">
+  <div id="topbar">
+    <div class="meta" id="meta-bar">Loading…</div>
+    <input id="search" placeholder="Search contacts…" oninput="renderView()" />
+  </div>
+  <div id="content-wrap">
+    <div id="content"></div>
+    <div id="detail"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="mailer-modal">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div style="font-size:15px;font-weight:800;margin-bottom:4px">Send Mailer</div>
+    <div id="mailer-to" style="color:#6b7280;font-size:12px;margin-bottom:20px"></div>
+    <textarea id="mailer-body" style="width:100%;background:#0d1117;border:1px solid #374151;border-radius:6px;padding:12px;color:#d1d5db;font-size:12px;resize:vertical;min-height:160px;box-sizing:border-box;margin-bottom:16px"></textarea>
+    <div style="background:#0d1117;border-radius:6px;padding:12px;margin-bottom:16px;color:#4b5563;font-size:11px">
+      💡 Connect SendGrid to enable live sending. Currently in preview mode.
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="closeMailer()" style="background:transparent;border:1px solid #374151;color:#6b7280;border-radius:6px;padding:8px 16px;font-size:12px;cursor:pointer">Cancel</button>
+      <button onclick="closeMailer()" style="background:#f59e0b;border:none;color:#000;border-radius:6px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer">Send ✉</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const PROXY = 'https://pipedrive-proxy-seven.vercel.app';
+let persons=[], deals=[], activities=[], pdUser=null, currentView='priority', selectedId=null;
+
+function badge(label,color,bg){
+  return `<span class="badge" style="background:${bg};color:${color};border-color:${color}33"><span class="dot" style="background:${color}"></span>${label}</span>`;
+}
+
+function priorityMeta(p){
+  if(p==='high') return {label:'Call Now',color:'#ef4444',bg:'#2d1515'};
+  if(p==='medium') return {label:'Follow Up',color:'#f59e0b',bg:'#2d2510'};
+  return {label:'Low Priority',color:'#6b7280',bg:'#1f2937'};
+}
+
+function scorePerson(p){
+  const now=new Date();
+  let score=0;
+  const acts=activities.filter(a=>a.person_id?.value===p.id);
+  const last=acts.sort((a,b)=>new Date(b.due_date)-new Date(a.due_date))[0];
+  const daysSince=last?Math.floor((now-new Date(last.due_date))/86400000):999;
+  if(daysSince>30) score+=3; else if(daysSince>14) score+=2; else if(daysSince>7) score+=1;
+  const pd=deals.filter(d=>d.person_id?.value===p.id);
+  if(pd.some(d=>d.status==='open')) score+=3;
+  if(pd.length===0) score+=1;
+  const overdue=acts.filter(a=>!a.done&&new Date(a.due_date)<now).length;
+  score+=overdue*2;
+  const priority=score>=6?'high':score>=3?'medium':'low';
+  return {...p,score,daysSince,overdue,personDeals:pd,priority};
+}
+
+function getScoredPersons(){
+  return persons.map(scorePerson).sort((a,b)=>b.score-a.score);
+}
+
+async function fetchPages(path){
+  let all=[],start=0,more=true;
+  while(more&&start<500){
+    const r=await fetch(`${PROXY}/api/pipedrive?path=${path}&limit=100&start=${start}`);
+    const d=await r.json();
+    if(!d.success||!d.data) break;
+    all=[...all,...d.data];
+    more=d.additional_data?.pagination?.more_items_in_collection;
+    start+=100;
+  }
+  return all;
+}
+
+async function fetchAll(){
+  document.getElementById('loading-screen').style.display='flex';
+  try{
+    const [p,d,a]=await Promise.all([fetchPages('persons'),fetchPages('deals'),fetchPages('activities')]);
+    persons=p; deals=d; activities=a;
+    updateMeta();
+    renderView();
+    document.getElementById('loading-screen').style.display='none';
+  }catch(e){
+    showError('Failed to load data. Check your proxy.');
+  }
+}
+
+async function init(){
+  document.getElementById('loading-screen').style.display='flex';
+  document.getElementById('error-screen').style.display='none';
+  try{
+    const r=await fetch(`${PROXY}/api/pipedrive?path=users/me`);
+    const d=await r.json();
+    if(d.success){
+      pdUser=d.data;
+      document.getElementById('username').textContent=pdUser.name;
+      await fetchAll();
+    } else showError('Pipedrive rejected the request. Check your API key in Vercel.');
+  }catch(e){
+    showError('Cannot reach proxy at '+PROXY);
+  }
+}
+
+function showError(msg){
+  document.getElementById('loading-screen').style.display='none';
+  document.getElementById('error-screen').style.display='flex';
+  document.getElementById('error-msg').textContent=msg;
+}
+
+function updateMeta(){
+  const now=new Date();
+  const open=deals.filter(d=>d.status==='open').length;
+  const overdue=activities.filter(a=>!a.done&&new Date(a.due_date)<now).length;
+  document.getElementById('meta-bar').textContent=`${persons.length} contacts · ${open} open deals · ${overdue} overdue tasks`;
+  const ob=document.getElementById('overdue-badge');
+  ob.textContent=overdue; ob.style.display=overdue>0?'inline':'none';
+}
+
+function setView(v){
+  currentView=v; selectedId=null;
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('nav-'+v).classList.add('active');
+  document.getElementById('detail').style.display='none';
+  renderView();
+}
+
+function renderView(){
+  const c=document.getElementById('content');
+  if(currentView==='priority') renderPriority(c);
+  else if(currentView==='tasks') renderTasks(c);
+  else if(currentView==='contacts') renderContacts(c);
+  else if(currentView==='pipeline') renderPipeline(c);
+}
+
+function getFiltered(){
+  const q=document.getElementById('search').value.toLowerCase();
+  const scored=getScoredPersons();
+  if(!q) return scored;
+  return scored.filter(p=>p.name?.toLowerCase().includes(q)||p.org_name?.toLowerCase().includes(q));
+}
+
+function renderPriority(c){
+  const now=new Date();
+  const scored=getScoredPersons();
+  const high=scored.filter(p=>p.priority==='high');
+  const open=deals.filter(d=>d.status==='open').length;
+  const overdue=activities.filter(a=>!a.done&&new Date(a.due_date)<now).length;
+  const list=getFiltered();
+  c.innerHTML=`
+    <h2 class="page-title">Priority Queue</h2>
+    <p class="page-sub">Your contacts ranked by urgency — call these first.</p>
+    <div class="stat-grid">
+      <div class="stat"><div class="slabel">Call Now</div><div class="sval" style="color:#ef4444">${high.length}</div><div class="ssub">High priority contacts</div></div>
+      <div class="stat"><div class="slabel">Overdue Tasks</div><div class="sval" style="color:#f97316">${overdue}</div><div class="ssub">Past due date</div></div>
+      <div class="stat"><div class="slabel">Open Deals</div><div class="sval" style="color:#3b82f6">${open}</div><div class="ssub">Active pipeline</div></div>
+      <div class="stat"><div class="slabel">Total Contacts</div><div class="sval" style="color:#10b981">${persons.length}</div><div class="ssub">In Pipedrive</div></div>
+    </div>
+    <div class="card">
+      <div class="tbl-head" style="grid-template-columns:2fr 1fr 1fr 1fr 80px">
+        <span>Contact</span><span>Priority</span><span>Last Contact</span><span>Overdue</span><span></span>
+      </div>
+      ${list.slice(0,50).map(p=>{
+        const pm=priorityMeta(p.priority);
+        return `<div class="tbl-row${p.id===selectedId?' selected':''}" style="grid-template-columns:2fr 1fr 1fr 1fr 80px" onclick="selectPerson(${p.id})">
+          <div><div style="color:#f9fafb;font-size:13px;font-weight:600">${p.name||''}</div><div style="color:#4b5563;font-size:11px;margin-top:2px">${p.org_name||'No org'} · ${p.personDeals.length} deal${p.personDeals.length!==1?'s':''}</div></div>
+          <div>${badge(pm.label,pm.color,pm.bg)}</div>
+          <div style="color:#9ca3af;font-size:12px">${p.daysSince===999?'Never':p.daysSince+'d ago'}</div>
+          <div style="color:${p.overdue>0?'#ef4444':'#4b5563'};font-size:12px;font-weight:${p.overdue>0?700:400}">${p.overdue>0?p.overdue+' overdue':'—'}</div>
+          <button onclick="event.stopPropagation();openMailer(${p.id})" style="background:#1f2937;border:1px solid #374151;color:#9ca3af;border-radius:5px;padding:4px 8px;font-size:10px;cursor:pointer">✉ Mail</button>
+        </div>`;
+      }).join('')}
+      ${persons.length===0?'<div style="padding:32px;color:#4b5563;text-align:center">No contacts loaded.</div>':''}
+    </div>`;
+}
+
+function renderTasks(c){
+  const now=new Date();
+  const open=activities.filter(a=>!a.done);
+  const overdue=open.filter(a=>new Date(a.due_date)<now);
+  const today=open.filter(a=>new Date(a.due_date).toDateString()===now.toDateString());
+  const sorted=open.sort((a,b)=>new Date(a.due_date)-new Date(b.due_date));
+  c.innerHTML=`
+    <h2 class="page-title">Task Queue</h2>
+    <p class="page-sub">All open activities from Pipedrive, sorted by urgency.</p>
+    <div class="stat-grid" style="grid-template-columns:repeat(3,1fr)">
+      <div class="stat"><div class="slabel">Overdue</div><div class="sval" style="color:#ef4444">${overdue.length}</div><div class="ssub">Need immediate attention</div></div>
+      <div class="stat"><div class="slabel">Due Today</div><div class="sval" style="color:#f59e0b">${today.length}</div><div class="ssub">On your plate today</div></div>
+      <div class="stat"><div class="slabel">Total Open</div><div class="sval" style="color:#6b7280">${open.length}</div><div class="ssub">All upcoming activities</div></div>
+    </div>
+    <div class="card">
+      <div class="tbl-head" style="grid-template-columns:2fr 1.5fr 1fr 100px">
+        <span>Activity</span><span>Contact</span><span>Due Date</span><span>Status</span>
+      </div>
+      ${sorted.map(t=>{
+        const isOv=new Date(t.due_date)<now;
+        const isTd=new Date(t.due_date).toDateString()===now.toDateString();
+        const lbl=isOv?'Overdue':isTd?'Today':'Upcoming';
+        const col=isOv?'#ef4444':isTd?'#f59e0b':'#6b7280';
+        const bg=isOv?'#2d1515':isTd?'#2d2510':'#1f2937';
+        return `<div class="tbl-row" style="grid-template-columns:2fr 1.5fr 1fr 100px;cursor:default">
+          <div><div style="color:#f9fafb;font-size:12px;font-weight:600">${t.subject||''}</div><div style="color:#4b5563;font-size:11px;margin-top:2px">${t.type||''}</div></div>
+          <div style="color:#9ca3af;font-size:12px">${t.person_id?.name||'—'}</div>
+          <div style="color:${col};font-size:12px;font-weight:${isOv||isTd?700:400}">${t.due_date||''}</div>
+          <div>${badge(lbl,col,bg)}</div>
+        </div>`;
+      }).join('')}
+      ${open.length===0?'<div style="padding:32px;color:#4b5563;text-align:center">No open tasks. You\'re clear! 🎉</div>':''}
+    </div>`;
+}
+
+function renderContacts(c){
+  const list=getFiltered();
+  c.innerHTML=`
+    <h2 class="page-title">All Contacts</h2>
+    <div class="card" style="margin-top:0">
+      <div class="tbl-head" style="grid-template-columns:2fr 1.5fr 1fr 1fr 80px">
+        <span>Name</span><span>Organization</span><span>Open Deals</span><span>Priority</span><span></span>
+      </div>
+      ${list.map(p=>{
+        const pm=priorityMeta(p.priority);
+        const od=p.personDeals.filter(d=>d.status==='open').length;
+        return `<div class="tbl-row${p.id===selectedId?' selected':''}" style="grid-template-columns:2fr 1.5fr 1fr 1fr 80px" onclick="selectPerson(${p.id})">
+          <div style="color:#f9fafb;font-size:12px;font-weight:600">${p.name||''}</div>
+          <div style="color:#9ca3af;font-size:12px">${p.org_name||'—'}</div>
+          <div style="color:#9ca3af;font-size:12px">${od}</div>
+          <div>${badge(pm.label,pm.color,pm.bg)}</div>
+          <button onclick="event.stopPropagation();openMailer(${p.id})" style="background:#1f2937;border:1px solid #374151;color:#9ca3af;border-radius:5px;padding:4px 8px;font-size:10px;cursor:pointer">✉ Mail</button>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
+function renderPipeline(c){
+  const open=deals.filter(d=>d.status==='open');
+  const stages={};
+  open.forEach(d=>{const s=d.stage_name||'Unknown';if(!stages[s])stages[s]=[];stages[s].push(d);});
+  c.innerHTML=`
+    <h2 class="page-title">Pipeline</h2>
+    <div class="pipeline-wrap">
+      ${Object.entries(stages).map(([stage,sDeals])=>`
+        <div class="pipeline-col">
+          <div style="display:flex;justify-content:space-between;margin-bottom:14px">
+            <div style="font-size:13px;font-weight:700">${stage}</div>
+            <span style="background:#1f2937;color:#9ca3af;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:700">${sDeals.length}</span>
+          </div>
+          ${sDeals.map(d=>`<div class="deal-card">
+            <div style="font-size:12px;font-weight:600;margin-bottom:3px">${d.title||''}</div>
+            <div style="color:#6b7280;font-size:11px">${d.person_id?.name||'No contact'}</div>
+            ${d.value>0?`<div style="color:#10b981;font-size:11px;margin-top:4px;font-weight:700">$${Number(d.value).toLocaleString()}</div>`:''}
+          </div>`).join('')}
+        </div>`).join('')}
+      ${Object.keys(stages).length===0?'<div style="color:#4b5563;font-size:13px">No open deals found.</div>':''}
+    </div>`;
+}
+
+function selectPerson(id){
+  selectedId=selectedId===id?null:id;
+  renderView();
+  if(!selectedId){document.getElementById('detail').style.display='none';return;}
+  const now=new Date();
+  const scored=getScoredPersons();
+  const p=scored.find(x=>x.id===selectedId);
+  if(!p) return;
+  const pm=priorityMeta(p.priority);
+  const acts=activities.filter(a=>a.person_id?.value===p.id).sort((a,b)=>new Date(b.due_date)-new Date(a.due_date));
+  const openTasks=acts.filter(a=>!a.done);
+  const d=document.getElementById('detail');
+  d.style.display='block';
+  d.innerHTML=`
+    <div style="display:flex;justify-content:space-between;margin-bottom:18px">
+      <div style="font-weight:800;font-size:15px">Contact Detail</div>
+      <button onclick="selectPerson(${p.id})" style="background:none;border:none;color:#6b7280;font-size:16px;cursor:pointer">✕</button>
+    </div>
+    <div style="display:flex;gap:12px;align-items:center;margin-bottom:18px">
+      <div style="width:42px;height:42px;border-radius:50%;background:#1f2937;display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:17px;font-weight:800">${(p.name||'?').charAt(0)}</div>
+      <div>
+        <div style="font-size:15px;font-weight:800">${p.name||''}</div>
+        <div style="color:#6b7280;font-size:11px">${p.org_name||'No organization'}</div>
+      </div>
+    </div>
+    <div style="margin-bottom:14px">${badge(pm.label,pm.color,pm.bg)}</div>
+    <div class="info-block">
+      <div class="section-label">Contact Info</div>
+      ${(p.phone||[]).filter(ph=>ph.value).map(ph=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="color:#9ca3af;font-size:12px">☎ ${ph.value}</span>
+          <button style="background:#10b98115;border:1px solid #10b98140;color:#10b981;border-radius:4px;padding:2px 8px;font-size:10px;font-weight:700;cursor:pointer">CALL</button>
+        </div>`).join('')}
+      ${(p.email||[]).filter(em=>em.value).map(em=>`<div style="color:#9ca3af;font-size:12px;margin-bottom:4px">✉ ${em.value}</div>`).join('')}
+    </div>
+    ${p.personDeals.length>0?`<div class="info-block">
+      <div class="section-label">Deals (${p.personDeals.length})</div>
+      ${p.personDeals.map(deal=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #1f2937">
+        <div><div style="color:#d1d5db;font-size:12px">${deal.title||''}</div><div style="color:#4b5563;font-size:10px">${deal.stage_name||''}</div></div>
+        <span style="color:${deal.status==='open'?'#3b82f6':'#6b7280'};font-size:11px;font-weight:700;text-transform:uppercase">${deal.status}</span>
+      </div>`).join('')}
+    </div>`:''}
+    ${openTasks.length>0?`<div class="info-block">
+      <div class="section-label">Open Tasks</div>
+      ${openTasks.map(t=>{const isOv=new Date(t.due_date)<now;return`<div style="padding:6px 0;border-bottom:1px solid #1f2937">
+        <div style="color:#d1d5db;font-size:12px">${t.subject||''}</div>
+        <div style="color:${isOv?'#ef4444':'#4b5563'};font-size:10px;margin-top:2px">Due: ${t.due_date||''}</div>
+      </div>`}).join('')}
+    </div>`:''}
+    <div class="info-block">
+      <div class="section-label">Notes & Activity</div>
+      ${acts.length===0?'<div style="color:#374151;font-size:12px">No activity yet.</div>':''}
+      ${acts.slice(0,5).map(a=>`<div style="padding:8px 0;border-bottom:1px solid #1f2937">
+        <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+          <span style="color:#f59e0b;font-size:10px;font-weight:700;text-transform:uppercase">${a.type||''}</span>
+          <span style="color:#4b5563;font-size:10px">${a.due_date||''}</span>
+        </div>
+        ${a.note?`<div style="color:#9ca3af;font-size:11px;line-height:1.6">${a.note}</div>`:''}
+        ${a.subject?`<div style="color:#6b7280;font-size:11px">${a.subject}</div>`:''}
+      </div>`).join('')}
+    </div>
+    <button onclick="openMailer(${p.id})" style="width:100%;background:#f59e0b;border:none;color:#000;border-radius:7px;padding:10px 0;font-size:12px;font-weight:800;cursor:pointer;margin-top:4px">✉ Send Mailer</button>`;
+}
+
+function openMailer(id){
+  const p=persons.find(x=>x.id===id);
+  if(!p) return;
+  document.getElementById('mailer-to').textContent=`To: ${p.name} · ${p.email?.[0]?.value||'No email on file'}`;
+  document.getElementById('mailer-body').value=`Hi ${(p.name||'').split(' ')[0]},\n\nI wanted to follow up...\n\nBest,\n${pdUser?.name||''}`;
+  document.getElementById('mailer-modal').style.display='flex';
+}
+function closeMailer(){document.getElementById('mailer-modal').style.display='none';}
+document.getElementById('mailer-modal').onclick=closeMailer;
+
+init();
+</script>
+</body>
+</html>
