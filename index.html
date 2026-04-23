@@ -151,10 +151,10 @@ function getScoredPersons(){
   return persons.map(scorePerson).sort((a,b)=>b.score-a.score);
 }
 
-async function fetchPages(path){
+async function fetchPages(path, extraParams=''){
   let all=[],start=0,more=true;
   while(more&&start<500){
-    const r=await fetch(`${PROXY}/api/pipedrive?path=${path}&limit=100&start=${start}`);
+    const r=await fetch(`${PROXY}/api/pipedrive?path=${path}&limit=100&start=${start}${extraParams}`);
     const d=await r.json();
     if(!d.success||!d.data) break;
     all=[...all,...d.data];
@@ -167,7 +167,12 @@ async function fetchPages(path){
 async function fetchAll(){
   document.getElementById('loading-screen').style.display='flex';
   try{
-    const [p,d,a]=await Promise.all([fetchPages('persons'),fetchPages('deals'),fetchPages('activities')]);
+    const MY_USER_ID = 23226973;
+    const [p,d,a]=await Promise.all([
+      fetchPages('persons','&owner_id='+MY_USER_ID),
+      fetchPages('deals','&user_id='+MY_USER_ID),
+      fetchPages('activities','&user_id='+MY_USER_ID),
+    ]);
     persons=p; deals=d; activities=a;
     updateMeta();
     renderView();
